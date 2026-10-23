@@ -1,0 +1,75 @@
+{% load static %}
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="description" content="Find the lowest-cost shipping box that fits an order.">
+  <title>Boxwise | Shipping box selector</title>
+  <link rel="stylesheet" href="{% static 'boxes/styles.css' %}">
+</head>
+<body>
+  <header class="site-header">
+    <a class="brand" href="{% url 'boxes:home' %}" aria-label="Boxwise home">boxwise<span>.</span></a>
+    <span class="header-note">Warehouse packing, simplified</span>
+  </header>
+  <main class="layout">
+    <section class="intro" aria-labelledby="page-title">
+      <p class="eyebrow">SMARTER SHIPPING STARTS HERE</p>
+      <h1 id="page-title">The right box.<br><span>Every time.</span></h1>
+      <p class="intro-copy">Enter your order dimensions and weight. We’ll find the most affordable box that fits, including rotated orientations.</p>
+      <div class="rule-note"><span class="rule-icon" aria-hidden="true">↻</span><span>All six orientations checked<br><strong>Fit and weight capacity both matter</strong></span></div>
+    </section>
+
+    <section class="calculator" aria-labelledby="form-title">
+      <div class="card-heading">
+        <div>
+          <p class="eyebrow">ORDER DETAILS</p>
+          <h2 id="form-title">What are you shipping?</h2>
+        </div>
+        <span class="step-badge" aria-hidden="true">01</span>
+      </div>
+      <form method="post" novalidate>
+        {% csrf_token %}
+        {% if form.non_field_errors %}
+          <div class="form-errors" role="alert">{{ form.non_field_errors }}</div>
+        {% endif %}
+        <div class="dimension-grid">
+          {% for field in form %}
+            <div class="field{% if field.errors %} field-invalid{% endif %}">
+              <label for="{{ field.id_for_label }}">{{ field.label }} <span>({% if field.name == "weight" %}kg{% else %}cm{% endif %})</span></label>
+              {{ field }}
+              {% if field.errors %}
+                <div class="field-error" id="{{ field.name }}-errors" role="alert">{{ field.errors }}</div>
+              {% endif %}
+            </div>
+          {% endfor %}
+        </div>
+        <p class="form-hint">Use centimetres for dimensions and kilograms for weight.</p>
+        <button type="submit">Find my box <span aria-hidden="true">→</span></button>
+      </form>
+
+      {% if searched %}
+        {% if recommendation %}
+          <section class="result result-success" aria-live="polite" aria-labelledby="result-title">
+            <p class="eyebrow">YOUR BEST MATCH</p>
+            <h2 id="result-title">{{ recommendation.name }}</h2>
+            <dl class="result-details">
+              <div><dt>Internal dimensions</dt><dd>{{ recommendation.internal_length }} × {{ recommendation.internal_width }} × {{ recommendation.internal_height }} cm</dd></div>
+              <div><dt>Maximum capacity</dt><dd>{{ recommendation.maximum_weight }} kg</dd></div>
+              <div><dt>Box cost</dt><dd>{{ recommendation.cost }}</dd></div>
+            </dl>
+          </section>
+        {% else %}
+          <section class="result result-empty" aria-live="polite" role="status">
+            <p class="eyebrow">NO MATCH FOUND</p>
+            <h2>No suitable box in inventory</h2>
+            <p>None of the available boxes can fit these dimensions and support this weight. Try another order or update your box inventory.</p>
+          </section>
+        {% endif %}
+      {% endif %}
+    </section>
+    <p class="disclaimer">Recommendations use deterministic size, weight, and cost rules—not AI predictions.</p>
+  </main>
+</body>
+</html>
