@@ -158,3 +158,32 @@ git push -u origin main
 ```
 
 Replace the placeholders with your own repository details. Do not commit credentials or `.env` files. To verify the submission, open the repository page in a browser and check that the source, migration, tests, and required documentation appear in the file list; confirm that `.venv/` and `db.sqlite3` do not.
+
+## Deploying on Render
+
+The Django project module is `config`; the production WSGI application is `config.wsgi:application`. Render's free web service uses an ephemeral filesystem, so this project's local SQLite database and its data are not durable across service restarts, rebuilds, or redeploys. The SQLite setup remains available for local development. Use a persistent external database if production data must survive.
+
+1. Commit and push the deployment changes to the existing `origin` remote, then create a **Web Service** in Render connected to that repository:
+
+   ```powershell
+   git add requirements.txt config/settings.py README.md
+   git commit -m "Prepare Django app for Render"
+   git push origin main
+   ```
+2. Select the Python runtime. Set the build command to:
+
+   ```text
+   pip install -r requirements.txt && python manage.py collectstatic --no-input && python manage.py migrate && python manage.py load_sample_boxes
+   ```
+
+   The sample command is repeatable and initializes the demo inventory. For an external persistent database, configure the database and its driver before migrating.
+3. Set the start command to:
+
+   ```text
+   gunicorn config.wsgi:application --bind 0.0.0.0:$PORT
+   ```
+
+4. In the service's environment settings, set `DEBUG` to `false` and `DJANGO_SECRET_KEY` to a newly generated private random value. You can generate one locally with `python -c "import secrets; print(secrets.token_urlsafe(50))"` and paste the result into Render; do not commit it. Render provides `RENDER_EXTERNAL_HOSTNAME`; the settings use it for Django's allowed host and HTTPS CSRF origin, and default `DEBUG` to false when that hostname is present. If you use a custom domain, add its hostname to `DJANGO_ALLOWED_HOSTS` and its full `https://` origin to `CSRF_TRUSTED_ORIGINS`, as comma-separated values when listing more than one.
+5. Deploy and review the Render build and service logs. The application should redirect HTTP requests to HTTPS, and collected CSS is served by WhiteNoise.
+
+These are deployment instructions only; they do not mean that a Render service has been created or deployed. The default SQLite database is appropriate for a demonstration without durable writes, not for storing production inventory or orders.
