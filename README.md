@@ -46,6 +46,7 @@ This is not an AI/ML prediction system. The runtime selection uses transparent c
 ├── TEST_CASES.md
 ├── TEST_OUTPUT.md
 ├── requirements.txt
+├── render.yaml
 ├── config/
 │   ├── asgi.py
 │   ├── settings.py
@@ -145,7 +146,7 @@ No genuine transcript export was provided with the workspace. See [docs/README.m
 
 - Dimensions can be entered in mm, cm, m, or inches and are converted to centimetres; weight is in kilograms. The form accepts positive decimal dimensions to four fractional digits and weights to two.
 - Box-chart capacities and INR costs are invented sample placeholders. Do not use them operationally until replaced with supplier data.
-- There is no authentication, payment, external AI API, product/order database, or deployment configuration.
+- There is no authentication, payment, external AI API, or product/order database. `render.yaml` configures a demonstration Render web service.
 - `DEBUG` is enabled for this local assignment. The fallback Django secret key is for local development only; do not deploy with the development settings or key. Set a private `DJANGO_SECRET_KEY` and configure production settings before deployment.
 - If imports fail, activate `.venv` and run `python -m pip install -r requirements.txt`.
 - If the database schema is missing, run `python manage.py migrate`.
@@ -154,40 +155,27 @@ No genuine transcript export was provided with the workspace. See [docs/README.m
 
 ## GitHub submission
 
-The project is prepared for local Git version control. No GitHub repository or remote is created by this application. After creating an empty repository on GitHub, add its URL and push the branch:
+The repository is [dhananjayawate0904-gif/box-selection-system](https://github.com/dhananjayawate0904-gif/box-selection-system). The current changes are pushed to `main`. For future changes, commit and push with:
 
 ```powershell
-git remote add origin https://github.com/<YOUR-USERNAME>/<YOUR-REPOSITORY>.git
-git push -u origin main
+git add <changed-files>
+git commit -m "Describe your changes"
+git push origin main
 ```
 
-Replace the placeholders with your own repository details. Do not commit credentials or `.env` files. To verify the submission, open the repository page in a browser and check that the source, migration, tests, and required documentation appear in the file list; confirm that `.venv/` and `db.sqlite3` do not.
+Do not commit credentials or `.env` files. Verify the repository page shows the source, migration, tests, and required documentation; confirm `.venv/` and `db.sqlite3` do not appear.
 
 ## Deploying on Render
 
 The Django project module is `config`; the production WSGI application is `config.wsgi:application`. Render's free web service uses an ephemeral filesystem, so this project's local SQLite database and its data are not durable across service restarts, rebuilds, or redeploys. The SQLite setup remains available for local development. Use a persistent external database if production data must survive.
 
-1. Commit and push the deployment changes to the existing `origin` remote, then create a **Web Service** in Render connected to that repository:
+The root [render.yaml](./render.yaml) defines the free web service, build and start commands, health check, and generated Django secret. To create the hosted service:
 
-   ```powershell
-   git add requirements.txt config/settings.py README.md
-   git commit -m "Prepare Django app for Render"
-   git push origin main
-   ```
-2. Select the Python runtime. Set the build command to:
+1. Push the repository to GitHub.
+2. Sign in to Render and choose **New** → **Blueprint**.
+3. Connect `dhananjayawate0904-gif/box-selection-system` and apply the Blueprint.
+4. Wait for the deployment to finish, then open the `onrender.com` URL shown in the service dashboard.
 
-   ```text
-   pip install -r requirements.txt && python manage.py collectstatic --no-input && python manage.py migrate && python manage.py load_sample_boxes
-   ```
+The Blueprint sets `DEBUG=false` and asks Render to generate `DJANGO_SECRET_KEY`; do not replace these with a committed secret. Render provides `RENDER_EXTERNAL_HOSTNAME`, which the settings use for allowed hosts and HTTPS CSRF origins. Static files are collected during the build and served by WhiteNoise. The build seeds the 11 sample boxes, so their placeholder capacities and INR costs must be replaced before operational use.
 
-   The sample command is repeatable and initializes the demo inventory. For an external persistent database, configure the database and its driver before migrating.
-3. Set the start command to:
-
-   ```text
-   gunicorn config.wsgi:application --bind 0.0.0.0:$PORT
-   ```
-
-4. In the service's environment settings, set `DEBUG` to `false` and `DJANGO_SECRET_KEY` to a newly generated private random value. You can generate one locally with `python -c "import secrets; print(secrets.token_urlsafe(50))"` and paste the result into Render; do not commit it. Render provides `RENDER_EXTERNAL_HOSTNAME`; the settings use it for Django's allowed host and HTTPS CSRF origin, and default `DEBUG` to false when that hostname is present. If you use a custom domain, add its hostname to `DJANGO_ALLOWED_HOSTS` and its full `https://` origin to `CSRF_TRUSTED_ORIGINS`, as comma-separated values when listing more than one.
-5. Deploy and review the Render build and service logs. The application should redirect HTTP requests to HTTPS, and collected CSS is served by WhiteNoise.
-
-These are deployment instructions only; they do not mean that a Render service has been created or deployed. The default SQLite database is appropriate for a demonstration without durable writes, not for storing production inventory or orders.
+The SQLite database on a free Render instance is ephemeral: seeded data may be recreated on deploy, and manual changes are not durable. Use a configured persistent external database if inventory must survive restarts. Adding `render.yaml` does not itself create or deploy a Render service; the Blueprint must be applied in an authenticated Render account.
