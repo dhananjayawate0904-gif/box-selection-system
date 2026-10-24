@@ -8,7 +8,15 @@
 
 ## Outputs accepted and reviewed
 
-The assistant drafted the Django model, form, recommendation service, view, template, responsive CSS, sample-data command, and automated tests, then produced project documentation. The developer should review these files before submitting. The service enumerates dimension permutations and uses explicit fit, weight, and sort comparisons; it does not call an AI model at runtime.
+This change extends the existing Django form, views, templates, responsive CSS, sample-data command, and automated tests; it adds a pure Decimal conversion module and a size-chart page. The developer should review the implementation before submitting. The service continues to enumerate dimension permutations and use explicit fit, weight, and sort comparisons; it does not call an AI model at runtime.
+
+## Multi-unit size chart change
+
+- **Dimension data provenance:** The standard catalogue examples and their inch measurements were supplied for this task as dimensions found through web searches of standard shipping-box size lists on Staples and ParcelPath pages. The mm, cm, and m figures use the stated exact conversions from those inch values. Extra-Large Flat (custom) is a custom size, not a standard catalogue size.
+- **Weight capacities and costs:** All 11 capacities and INR costs are invented sample placeholders, not values sourced from Staples, ParcelPath, or a supplier. Replace them with your supplier’s verified data before relying on recommendations.
+- **Prompts used:** [Fill in the prompts you used for this change.]
+- **Mistakes found:** [Fill in mistakes you found while reviewing or testing.]
+- **External-source verification:** The source names and measurement values above are the task-provided provenance. Individual page URLs and matching exact product listings were not independently captured in the project record.
 
 The assistant used the available Python virtual environment and observed results from Django checks, migration checks, the automated test suite, migration application, and two sample-data command runs. Those observed outputs and exit statuses are recorded in [TEST_OUTPUT.md](./TEST_OUTPUT.md).
 
@@ -27,9 +35,10 @@ Observed facts at completion:
 
 - The existing virtual environment uses Python 3.14.0 and Django 6.1.2.
 - `manage.py check` and `makemigrations --check --dry-run` passed.
-- Django reported 22 tests passing.
-- The initial migration was applied to SQLite.
-- Running `load_sample_boxes` twice left exactly three sample rows.
+- Django reported 40 tests passing after this change; intermediate focused test failures and their corrected reruns are retained in [TEST_OUTPUT.md](./TEST_OUTPUT.md).
+- `makemigrations --check --dry-run` found no schema changes, and `migrate` reported no migrations to apply.
+- The local SQLite sample inventory contains 11 boxes after the updated seed command ran twice.
+- The updated `load_sample_boxes` command seeds 11 size-chart rows and is tested for repeatability.
 
 See [TEST_OUTPUT.md](./TEST_OUTPUT.md) for the command output and statuses. These facts describe local verification only; they do not claim deployment, a GitHub push, an exported transcript, or a completed personal reflection.
 

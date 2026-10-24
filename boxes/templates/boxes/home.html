@@ -11,7 +11,10 @@
 <body>
   <header class="site-header">
     <a class="brand" href="{% url 'boxes:home' %}" aria-label="Boxwise home">boxwise<span>.</span></a>
-    <span class="header-note">Warehouse packing, simplified</span>
+    <nav class="site-nav" aria-label="Main navigation">
+      <a href="{% url 'boxes:size_chart' %}">Size chart</a>
+      <span class="header-note">Warehouse packing, simplified</span>
+    </nav>
   </header>
   <main class="layout">
     <section class="intro" aria-labelledby="page-title">
@@ -19,6 +22,7 @@
       <h1 id="page-title">The right box.<br><span>Every time.</span></h1>
       <p class="intro-copy">Enter your order dimensions and weight. We’ll find the most affordable box that fits, including rotated orientations.</p>
       <div class="rule-note"><span class="rule-icon" aria-hidden="true">↻</span><span>All six orientations checked<br><strong>Fit and weight capacity both matter</strong></span></div>
+      <p class="chart-link"><a href="{% url 'boxes:size_chart' %}">Browse the box size chart →</a></p>
     </section>
 
     <section class="calculator" aria-labelledby="form-title">
@@ -37,7 +41,13 @@
         <div class="dimension-grid">
           {% for field in form %}
             <div class="field{% if field.errors %} field-invalid{% endif %}">
-              <label for="{{ field.id_for_label }}">{{ field.label }} <span>({% if field.name == "weight" %}kg{% else %}cm{% endif %})</span></label>
+              {% if field.name == "unit" %}
+                <label for="{{ field.id_for_label }}">{{ field.label }}</label>
+              {% elif field.name == "weight" %}
+                <label for="{{ field.id_for_label }}">{{ field.label }} <span>(kg)</span></label>
+              {% else %}
+                <label for="{{ field.id_for_label }}">{{ field.label }} <span class="unit-label">({{ selected_unit_label }})</span></label>
+              {% endif %}
               {{ field }}
               {% if field.errors %}
                 <div class="field-error" id="{{ field.name }}-errors" role="alert">{{ field.errors }}</div>
@@ -45,7 +55,7 @@
             </div>
           {% endfor %}
         </div>
-        <p class="form-hint">Use centimetres for dimensions and kilograms for weight.</p>
+        <p class="form-hint">Use the selected unit for dimensions and kilograms for weight.</p>
         <button type="submit">Find my box <span aria-hidden="true">→</span></button>
       </form>
 
@@ -55,9 +65,11 @@
             <p class="eyebrow">YOUR BEST MATCH</p>
             <h2 id="result-title">{{ recommendation.name }}</h2>
             <dl class="result-details">
-              <div><dt>Internal dimensions</dt><dd>{{ recommendation.internal_length }} × {{ recommendation.internal_width }} × {{ recommendation.internal_height }} cm</dd></div>
+              {% for dimension in recommended_dimensions %}
+                <div><dt>Internal dimensions ({{ dimension.label }})</dt><dd>{{ dimension.dimensions }}</dd></div>
+              {% endfor %}
               <div><dt>Maximum capacity</dt><dd>{{ recommendation.maximum_weight }} kg</dd></div>
-              <div><dt>Box cost</dt><dd>{{ recommendation.cost }}</dd></div>
+              <div><dt>Sample box cost</dt><dd>INR {{ recommendation.cost }}</dd></div>
             </dl>
           </section>
         {% else %}
@@ -71,5 +83,16 @@
     </section>
     <p class="disclaimer">Recommendations use deterministic size, weight, and cost rules—not AI predictions.</p>
   </main>
+  <script>
+    const unitSelect = document.getElementById("id_unit");
+    if (unitSelect) {
+      unitSelect.addEventListener("change", () => {
+        const labels = { mm: "mm", cm: "cm", m: "m", in: "in" };
+        document.querySelectorAll(".unit-label").forEach((label) => {
+          label.textContent = `(${labels[unitSelect.value] || "cm"})`;
+        });
+      });
+    }
+  </script>
 </body>
 </html>

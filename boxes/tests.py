@@ -8,6 +8,7 @@ from django.urls import reverse
 from .forms import OrderDimensionsForm
 from .models import Box
 from .services import recommend_box
+from .units import format_all_units, from_cm, to_cm
 
 
 def make_box(name, dimensions, weight="10.00", cost="5.00"):
@@ -135,12 +136,65 @@ class RecommendationServiceTests(TestCase):
         self.assertEqual(result, uppercase)
 
 
+class UnitConversionTests(TestCase):
+    def test_to_cm_uses_exact_decimal_conversions(self):
+        cases = (
+            ("10", "mm", "1"),
+            ("30.48", "cm", "30.48"),
+            ("0.3048", "m", "30.48"),
+            ("12", "in", "30.48"),
+        )
+        for value, unit, expected in cases:
+            with self.subTest(unit=unit):
+                self.assertEqual(to_cm(Decimal(value), unit), Decimal(expected))
+
+    def test_from_cm_uses_exact_decimal_conversions(self):
+        cases = (
+            ("2.54", "mm", "25.4"),
+            ("30.48", "cm", "30.48"),
+            ("30.48", "m", "0.3048"),
+            ("30.48", "in", "12"),
+        )
+        for value, unit, expected in cases:
+            with self.subTest(unit=unit):
+                self.assertEqual(from_cm(Decimal(value), unit), Decimal(expected))
+
+    def test_format_all_units_returns_decimal_values(self):
+        values = format_all_units(Decimal("30.48"))
+
+        self.assertEqual(values, {
+            "mm": Decimal("304.80"),
+            "cm": Decimal("30.48"),
+            "m": Decimal("0.3048"),
+            "in": Decimal("12.00000000000000000000000000"),
+        })
+        self.assertTrue(all(isinstance(value, Decimal) for value in values.values()))
+
+    def test_round_trip_preserves_values_for_each_unit(self):
+        values = (("304.8", "mm"), ("30.48", "cm"), ("0.3048", "m"), ("12", "in"))
+        for value, unit in values:
+            with self.subTest(unit=unit):
+                self.assertEqual(
+                    from_cm(to_cm(Decimal(value), unit), unit),
+                    Decimal(value),
+                )
+
+    def test_invalid_unit_raises_clear_value_error(self):
+        with self.assertRaisesRegex(ValueError, "Unknown dimension unit"):
+            to_cm(Decimal("1"), "yards")
+
+    def test_float_values_are_not_accepted(self):
+        with self.assertRaisesRegex(TypeError, "Decimal, not float"):
+            to_cm(1.0, "cm")
+
+
 class OrderDimensionsFormTests(TestCase):
     valid_data = {
         "length": "4.00",
         "width": "3.00",
         "height": "2.00",
         "weight": "1.00",
+        "unit": "cm",
     }
 
     def test_missing_value_is_rejected(self):
@@ -161,13 +215,103 @@ class OrderDimensionsFormTests(TestCase):
         self.assertIn("width", form.errors)
 
     def test_zero_and_negative_values_are_rejected(self):
-        for field in self.valid_data:
+        for field in ("length", "width", "height", "weight"):
             for invalid_value in ("0", "-1.00"):
                 with self.subTest(field=field, value=invalid_value):
                     data = self.valid_data | {field: invalid_value}
                     form = OrderDimensionsForm(data)
                     self.assertFalse(form.is_valid())
                     self.assertIn(field, form.errors)
+
+    def test_unit_defaults_to_centimetres(self):
+        form = OrderDimensionsForm()
+
+        self.assertEqual(form["unit"].value(), "cm")
+
+    def test_each_unit_converts_form_dimensions_to_centimetres(self):
+        cases = (
+            ("mm", "304.8"),
+            ("cm", "30.48"),
+            ("m", "0.3048"),
+            ("in", "12"),
+        )
+        for unit, value in cases:
+            with self.subTest(unit=unit):
+                data = {
+                    "length": value,
+                    "width": value,
+                    "height": value,
+                    "weight": "1.00",
+                    "unit": unit,
+                }
+                form = OrderDimensionsForm(data)
+                self.assertTrue(form.is_valid(), form.errors)
+                self.assertEqual(
+                    form.cleaned_data["dimensions_cm"],
+                    (Decimal("30.48"),) * 3,
+                )
+
+    def test_minimum_dimension_is_validated_in_canonical_centimetres(self):
+        accepted = OrderDimensionsForm({
+            "length": "0.0001",
+            "width": "0.0001",
+            "height": "0.0001",
+            "weight": "1",
+            "unit": "m",
+        })
+        rejected = OrderDimensionsForm({
+            "length": "0.001",
+            "width": "1",
+            "height": "1",
+            "weight": "1",
+            "unit": "cm",
+        })
+
+        self.assertTrue(accepted.is_valid(), accepted.errors)
+        self.assertEqual(
+            accepted.cleaned_data["dimensions_cm"],
+            (Decimal("0.0100"),) * 3,
+        )
+        self.assertFalse(rejected.is_valid())
+        self.assertIn("length", rejected.errors)
+
+    def test_equivalent_dimensions_in_each_unit_recommend_the_same_box(self):
+        matching_box = make_box("Equivalent dimensions", ("31", "31", "31"))
+        cases = (
+            ("mm", "304.8"),
+            ("cm", "30.48"),
+            ("m", "0.3048"),
+            ("in", "12"),
+        )
+
+        for unit, value in cases:
+            with self.subTest(unit=unit):
+                data = {
+                    "length": value,
+                    "width": value,
+                    "height": value,
+                    "weight": "1.00",
+                    "unit": unit,
+                }
+                form = OrderDimensionsForm(data)
+                self.assertTrue(form.is_valid(), form.errors)
+                result = recommend_box(
+                    *form.cleaned_data["dimensions_cm"],
+                    form.cleaned_data["weight"],
+                )
+                self.assertEqual(result, matching_box)
+
+    def test_missing_and_unknown_units_are_rejected(self):
+        for unit in (None, "yards"):
+            with self.subTest(unit=unit):
+                data = self.valid_data.copy()
+                if unit is None:
+                    data.pop("unit")
+                else:
+                    data["unit"] = unit
+                form = OrderDimensionsForm(data)
+                self.assertFalse(form.is_valid())
+                self.assertIn("unit", form.errors)
 
 
 class BoxSelectionViewTests(TestCase):
@@ -179,6 +323,7 @@ class BoxSelectionViewTests(TestCase):
             "width": "6.00",
             "height": "4.00",
             "weight": "3.00",
+            "unit": "cm",
         }
 
     def test_main_page_loads(self):
@@ -193,6 +338,34 @@ class BoxSelectionViewTests(TestCase):
         self.assertEqual(response.status_code, 200)
         self.assertContains(response, self.box.name)
         self.assertContains(response, "2.50")
+
+    def test_result_displays_dimensions_in_all_units(self):
+        response = self.client.post(reverse("boxes:home"), self.order_data)
+
+        self.assertEqual(response.status_code, 200)
+        for unit in ("mm", "cm", "m", "in"):
+            with self.subTest(unit=unit):
+                self.assertContains(response, f"Internal dimensions ({unit})")
+
+    def test_inches_post_returns_the_matching_box(self):
+        standard_small = make_box(
+            "Standard Small",
+            ("25.40", "20.32", "15.24"),
+            weight="6.00",
+            cost="20.00",
+        )
+        data = {
+            "length": "10",
+            "width": "8",
+            "height": "6",
+            "weight": "2",
+            "unit": "in",
+        }
+
+        response = self.client.post(reverse("boxes:home"), data)
+
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, standard_small.name)
 
     def test_no_fit_post_displays_clear_message(self):
         data = self.order_data | {"length": "30.00", "weight": "3.00"}
@@ -239,8 +412,106 @@ class SampleBoxCommandTests(TestCase):
         call_command("load_sample_boxes")
         call_command("load_sample_boxes")
 
-        self.assertEqual(Box.objects.count(), 3)
+        self.assertEqual(Box.objects.count(), 11)
         self.assertEqual(
-            set(Box.objects.values_list("name", flat=True)),
-            {"Small", "Medium", "Large"},
+            Box.objects.values_list("cost", flat=True).distinct().count(),
+            11,
         )
+
+    def test_sample_command_replaces_unchanged_legacy_demo_rows(self):
+        for name, dimensions, weight, cost in (
+            ("Small", ("20", "15", "10"), "5", "2.50"),
+            ("Medium", ("40", "30", "20"), "15", "4.75"),
+            ("Large", ("60", "45", "35"), "30", "7.25"),
+        ):
+            make_box(name, dimensions, weight=weight, cost=cost)
+
+        call_command("load_sample_boxes")
+
+        self.assertEqual(Box.objects.count(), 11)
+        self.assertEqual(
+            Box.objects.get(name="Medium").internal_length,
+            Decimal("40.64"),
+        )
+
+
+class SizeChartViewTests(TestCase):
+    def setUp(self):
+        call_command("load_sample_boxes")
+
+    def test_size_chart_page_contains_every_seeded_box(self):
+        response = Client().get(reverse("boxes:size_chart"))
+
+        self.assertEqual(response.status_code, 200)
+        for name in (
+            "Small Flat",
+            "Mailer Small",
+            "Garment Flat",
+            "Standard Small",
+            "Standard Cube",
+            "Multi-Item",
+            "Medium",
+            "Tall Medium",
+            "Large",
+            "Large Flat",
+            "Extra-Large Flat (custom)",
+        ):
+            with self.subTest(name=name):
+                self.assertContains(response, name)
+        self.assertContains(response, "How to measure")
+        self.assertContains(response, "scope=\"col\"")
+        self.assertContains(response, "scope=\"row\"")
+        self.assertContains(response, "711.2 × 609.6 × 101.6")
+        self.assertContains(response, "71.12 × 60.96 × 10.16")
+        self.assertContains(response, "0.7112 × 0.6096 × 0.1016")
+        self.assertContains(response, "28 × 24 × 4")
+
+
+class SizeChartRegressionTests(TestCase):
+    def setUp(self):
+        call_command("load_sample_boxes")
+
+    def test_67_by_56_by_5_cm_fits_extra_large_flat_custom(self):
+        result = recommend_box(
+            Decimal("67"),
+            Decimal("56"),
+            Decimal("5"),
+            Decimal("2"),
+        )
+
+        self.assertEqual(result.name, "Extra-Large Flat (custom)")
+
+    def test_order_over_71_12_cm_returns_no_fit(self):
+        result = recommend_box(
+            Decimal("71.13"),
+            Decimal("2"),
+            Decimal("2"),
+            Decimal("2"),
+        )
+
+        self.assertIsNone(result)
+
+    def test_exact_inches_boundary_fits_and_001_above_does_not(self):
+        exact_dimensions = {
+            "length": "28",
+            "width": "24",
+            "height": "4",
+            "weight": "2",
+            "unit": "in",
+        }
+        exact_form = OrderDimensionsForm(exact_dimensions)
+        self.assertTrue(exact_form.is_valid(), exact_form.errors)
+        exact_box = recommend_box(
+            *exact_form.cleaned_data["dimensions_cm"],
+            exact_form.cleaned_data["weight"],
+        )
+        self.assertEqual(exact_box.name, "Extra-Large Flat (custom)")
+
+        above_dimensions = exact_dimensions | {"length": "28.01"}
+        above_form = OrderDimensionsForm(above_dimensions)
+        self.assertTrue(above_form.is_valid(), above_form.errors)
+        above_box = recommend_box(
+            *above_form.cleaned_data["dimensions_cm"],
+            above_form.cleaned_data["weight"],
+        )
+        self.assertIsNone(above_box)

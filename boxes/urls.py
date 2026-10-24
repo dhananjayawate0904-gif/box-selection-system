@@ -6,4 +6,5 @@ app_name = "boxes"
 
 urlpatterns = [
     path("", views.home, name="home"),
+    path("size-chart/", views.size_chart, name="size_chart"),
 ]

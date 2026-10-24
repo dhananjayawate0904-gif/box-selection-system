@@ -1,0 +1,84 @@
+{% load static %}
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="description" content="Compare internal shipping box dimensions in four units.">
+  <title>Boxwise | Box size chart</title>
+  <link rel="stylesheet" href="{% static 'boxes/styles.css' %}">
+</head>
+<body>
+  <header class="site-header">
+    <a class="brand" href="{% url 'boxes:home' %}" aria-label="Boxwise home">boxwise<span>.</span></a>
+    <nav class="site-nav" aria-label="Main navigation">
+      <a href="{% url 'boxes:home' %}">Box selector</a>
+      <span class="header-note">Warehouse packing, simplified</span>
+    </nav>
+  </header>
+  <main class="chart-layout">
+    <section class="chart-heading" aria-labelledby="page-title">
+      <p class="eyebrow">BOX INVENTORY</p>
+      <h1 id="page-title">Shipping box <span>size chart</span></h1>
+      <p>Dimensions are internal. Measure the inside of your box and include enough room for padding around the item.</p>
+      <p class="sample-note">Dimensions follow common standard carton sizes. Capacities and costs are sample placeholders; replace them with your supplier’s data. Extra-Large Flat is a custom size, not a standard catalogue size.</p>
+    </section>
+    <section class="chart-card" aria-label="Shipping box dimensions">
+      <div class="unit-toggle" role="group" aria-label="Choose dimension units to display">
+        <button type="button" data-unit="all" aria-pressed="true">All units</button>
+        <button type="button" data-unit="mm" aria-pressed="false">mm</button>
+        <button type="button" data-unit="cm" aria-pressed="false">cm</button>
+        <button type="button" data-unit="m" aria-pressed="false">m</button>
+        <button type="button" data-unit="in" aria-pressed="false">inches</button>
+      </div>
+      <div class="table-scroll" role="region" aria-label="Box size chart table" tabindex="0">
+        <table class="size-chart">
+          <caption>Internal box dimensions (length × width × height), maximum weight, and sample cost</caption>
+          <thead>
+            <tr>
+              <th scope="col">Box name</th>
+              <th scope="col" data-unit-column="mm">L × W × H (mm)</th>
+              <th scope="col" data-unit-column="cm">L × W × H (cm)</th>
+              <th scope="col" data-unit-column="m">L × W × H (m)</th>
+              <th scope="col" data-unit-column="in">L × W × H (in)</th>
+              <th scope="col">Max weight (kg)</th>
+              <th scope="col">Sample cost (INR)</th>
+            </tr>
+          </thead>
+          <tbody>
+            {% for row in box_rows %}
+              <tr>
+                <th scope="row">{{ row.box.name }}</th>
+                <td data-unit-column="mm">{{ row.dimensions.mm }}</td>
+                <td data-unit-column="cm">{{ row.dimensions.cm }}</td>
+                <td data-unit-column="m">{{ row.dimensions.m }}</td>
+                <td data-unit-column="in">{{ row.dimensions.in }}</td>
+                <td>{{ row.box.maximum_weight }}</td>
+                <td>{{ row.box.cost }}</td>
+              </tr>
+            {% empty %}
+              <tr><td colspan="7">No boxes are currently in the inventory.</td></tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+      <p class="chart-measure-note"><strong>How to measure:</strong> Use the box’s internal length, width, and height, and allow space for protective padding.</p>
+    </section>
+  </main>
+  <script>
+    const unitButtons = document.querySelectorAll(".unit-toggle button");
+    const unitColumns = document.querySelectorAll("[data-unit-column]");
+    unitButtons.forEach((button) => {
+      button.addEventListener("click", () => {
+        const selected = button.dataset.unit;
+        unitButtons.forEach((item) => {
+          item.setAttribute("aria-pressed", String(item === button));
+        });
+        unitColumns.forEach((column) => {
+          column.hidden = selected !== "all" && column.dataset.unitColumn !== selected;
+        });
+      });
+    });
+  </script>
+</body>
+</html>

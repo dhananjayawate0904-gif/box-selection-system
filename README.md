@@ -4,19 +4,20 @@ A small Django application that recommends the lowest-cost warehouse box able to
 
 ## Features
 
-- Enter order length, width, height (cm), and weight (kg).
+- Enter order length, width, and height in mm, cm, m, or inches; centimetres remain the internal canonical unit. Weight stays in kg.
+- Browse the box size chart with all four dimension units, or use its accessible unit toggle to focus on one unit.
 - Check all six rotations of the order dimensions against each box.
 - Reject boxes that cannot fit the order or support its weight.
 - Choose the lowest-cost eligible box, with ties resolved by internal volume and then case-insensitive box name.
 - Show a clear no-fit message when inventory has no suitable box.
 - Validate every value on the server and protect POST requests with Django CSRF middleware.
-- Load or refresh three sample boxes with a repeatable management command.
+- Load or refresh the 11-box sample size chart with a repeatable management command.
 
-The displayed box cost is a decimal amount without a currency symbol because the assignment does not specify a currency.
+Box dimensions follow common standard shipping-carton sizes, based on inch sizes identified in the Staples and ParcelPath size lists and converted with exact Decimal factors. Extra-Large Flat is a custom size, not a standard catalogue size. All chart capacities and INR costs are invented sample placeholders, not supplier data; replace them with verified figures from your supplier before using recommendations operationally.
 
 ## Algorithm
 
-For each box whose maximum weight is at least the order weight, the service generates all permutations of the order's three dimensions. A box is eligible when one orientation fits all three internal dimensions. It then chooses the minimum `(cost, internal volume, case-insensitive name, exact name)` tuple so ties remain deterministic even when names differ only by letter case. Exact dimensional and weight-capacity boundaries are accepted. If there are no eligible boxes, the service returns `None`; it never substitutes a larger or overweight box.
+The form validates each submitted dimension and unit, then converts dimensions to centimetres before calling the existing recommendation service. `boxes/units.py` is a pure-Python Decimal-only conversion module for mm, cm, m, and inches. For each box whose maximum weight is at least the order weight, the service generates all permutations of the order's three dimensions. A box is eligible when one orientation fits all three internal dimensions. It then chooses the minimum `(cost, internal volume, case-insensitive name, exact name)` tuple so ties remain deterministic even when names differ only by letter case. Exact dimensional and weight-capacity boundaries are accepted. If there are no eligible boxes, the service returns `None`; it never substitutes a larger or overweight box.
 
 This is not an AI/ML prediction system. The runtime selection uses transparent comparisons and deterministic sorting only.
 
@@ -24,12 +25,13 @@ This is not an AI/ML prediction system. The runtime selection uses transparent c
 
 - `config/` contains Django settings and the root URL configuration.
 - `boxes/models.py` defines the validated `Box` inventory model and database constraints.
-- `boxes/forms.py` validates submitted order measurements.
+- `boxes/units.py` performs pure Decimal unit conversions with centimetres as the canonical unit.
+- `boxes/forms.py` validates submitted order measurements and converts dimensions to centimetres.
 - `boxes/services.py` contains independently testable recommendation logic.
-- `boxes/views.py`, `boxes/urls.py`, and `boxes/templates/` provide the request flow and interface.
+- `boxes/views.py`, `boxes/urls.py`, and `boxes/templates/` provide the request flow, selector, and size chart.
 - `boxes/static/boxes/styles.css` provides the responsive styling.
-- `boxes/management/commands/load_sample_boxes.py` supplies repeatable demo data.
-- `boxes/tests.py` covers the service, form, web flow, CSRF protection, and sample-data command.
+- `boxes/management/commands/load_sample_boxes.py` supplies the repeatable 11-box sample chart.
+- `boxes/tests.py` covers the service, unit conversion, form, web flow, chart, CSRF protection, boundaries, and seed command.
 - `boxes/migrations/0001_initial.py` creates the inventory table.
 - `docs/README.md` explains how to add a genuine exported chat transcript.
 
@@ -59,7 +61,9 @@ This is not an AI/ML prediction system. The runtime selection uses transparent c
     ├── services.py
     ├── static/boxes/styles.css
     ├── templates/boxes/home.html
+    ├── templates/boxes/size_chart.html
     ├── tests.py
+    ├── units.py
     ├── urls.py
     └── views.py
 ```
@@ -101,7 +105,7 @@ python manage.py load_sample_boxes
 python manage.py runserver
 ```
 
-Open the local address printed by Django (normally `http://127.0.0.1:8000/`). Run the sample-data command whenever you want to restore the sample inventory; it updates the three named samples instead of inserting duplicates.
+Open the local address printed by Django (normally `http://127.0.0.1:8000/`). Run the sample-data command whenever you want to restore the sample inventory; it updates the 11 named chart entries instead of inserting duplicates.
 
 ## Database and sample inventory
 
@@ -111,13 +115,13 @@ The project uses the SQLite database `db.sqlite3` in the project directory. Appl
 python manage.py migrate
 ```
 
-Load or refresh the three sample boxes with:
+Load or refresh the 11 sample chart boxes with:
 
 ```powershell
 python manage.py load_sample_boxes
 ```
 
-The sample boxes are named Small, Medium, and Large. The command is idempotent for those names and updates their dimensions, capacities, and costs if they already exist.
+The command seeds these 11 sizes with internal dimensions stored in centimetres: Small Flat, Mailer Small, Garment Flat, Standard Small, Standard Cube, Multi-Item, Medium, Tall Medium, Large, Large Flat, and Extra-Large Flat (custom). It uses `update_or_create` keyed on box name; repeated runs do not create duplicates. It also removes an unchanged record from the old demo set when that record still exactly matches its original placeholder values. All chart weight capacities and INR costs are sample placeholders and must be replaced with supplier data.
 
 ## Tests and checks
 
@@ -139,8 +143,8 @@ No genuine transcript export was provided with the workspace. See [docs/README.m
 
 ## Limitations and troubleshooting
 
-- Dimensions are in centimetres and weight is in kilograms. The form accepts positive decimal values to two fractional digits.
-- The cost field is a decimal with no assumed currency.
+- Dimensions can be entered in mm, cm, m, or inches and are converted to centimetres; weight is in kilograms. The form accepts positive decimal dimensions to four fractional digits and weights to two.
+- Box-chart capacities and INR costs are invented sample placeholders. Do not use them operationally until replaced with supplier data.
 - There is no authentication, payment, external AI API, product/order database, or deployment configuration.
 - `DEBUG` is enabled for this local assignment. The fallback Django secret key is for local development only; do not deploy with the development settings or key. Set a private `DJANGO_SECRET_KEY` and configure production settings before deployment.
 - If imports fail, activate `.venv` and run `python -m pip install -r requirements.txt`.
