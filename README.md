@@ -169,13 +169,13 @@ Do not commit credentials or `.env` files. Verify the repository page shows the 
 
 The Django project module is `config`; the production WSGI application is `config.wsgi:application`. Render's free web service uses an ephemeral filesystem, so this project's local SQLite database and its data are not durable across service restarts, rebuilds, or redeploys. The SQLite setup remains available for local development. Use a persistent external database if production data must survive.
 
-The root [render.yaml](./render.yaml) defines the free web service, build and start commands, health check, and generated Django secret. To create the hosted service:
+The root [render.yaml](./render.yaml) defines the free web service, build and start commands, health check, and required Django secret. Database migrations and sample-box loading run at service startup so they initialize the runtime filesystem before Gunicorn serves requests. To create the hosted service:
 
 1. Push the repository to GitHub.
 2. Sign in to Render and choose **New** → **Blueprint**.
 3. Connect `dhananjayawate0904-gif/box-selection-system` and apply the Blueprint.
 4. Wait for the deployment to finish, then open the `onrender.com` URL shown in the service dashboard.
 
-The Blueprint sets `DEBUG=false` and asks Render to generate `DJANGO_SECRET_KEY`; do not replace these with a committed secret. Render provides `RENDER_EXTERNAL_HOSTNAME`, which the settings use for allowed hosts and HTTPS CSRF origins. Static files are collected during the build and served by WhiteNoise. The build seeds the 11 sample boxes, so their placeholder capacities and INR costs must be replaced before operational use.
+The Blueprint sets `DEBUG=false` and requires you to provide `DJANGO_SECRET_KEY` as a private environment variable; do not commit it. Generate a strong value (for example, with `python -c "import secrets; print(secrets.token_urlsafe(50))"`) and set it in the Render service's environment settings before deploying. Render provides `RENDER_EXTERNAL_HOSTNAME`, which the settings use for allowed hosts and HTTPS CSRF origins. Static files are collected during the build and served by WhiteNoise. Startup applies migrations and loads the 11 sample boxes; their placeholder capacities and INR costs must be replaced before operational use.
 
 The SQLite database on a free Render instance is ephemeral: seeded data may be recreated on deploy, and manual changes are not durable. Use a configured persistent external database if inventory must survive restarts. Adding `render.yaml` does not itself create or deploy a Render service; the Blueprint must be applied in an authenticated Render account.
